@@ -1,0 +1,221 @@
+
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Clipboard Sender (Python)</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 2rem; }
+    #pasteArea {
+      height: 10rem; border: 2px dashed #888; display:flex;
+      align-items:center; justify-content:center; transition: border-color .15s ease;
+    }
+    #pasteArea.dragover { border-color: #2a7; background: #f6fff6; }
+    #status, #preview { margin-top: 1rem; }
+    img { max-width: 400px; display:block; margin-top:0.5rem; }
+    code { background:#f5f5f5; padding: 0.2rem 0.4rem; }
+    .row { margin-top: 1rem; }
+    .file-line { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+  </style>
+</head>
+<body>
+  <h1>Clipboard Sender</h1>
+  <p>Click the box, then <strong>paste</strong> (<code>Ctrl+V</code>/<code>Cmd+V</code>) or <strong>drag &amp; drop files</strong>. Content will be sent automatically.</p>
+
+  <div id="pasteArea" contenteditable="true" aria-label="Paste or drop here">Paste or drop here…</div>
+  <div id="status"></div>
+  <div id="preview" class="row"></div>
+
+  <script>
+    const pasteArea = document.getElementById('pasteArea');
+    const status    = document.getElementById('status');
+    const preview   = document.getElementById('preview');
+
+    let sending = false; // prevent overlapping sends
+
+    // --- PASTE ---
+    pasteArea.addEventListener('paste', async (e) => {
+      e.preventDefault();
+      if (sending) return;
+      clearUI();
+
+      const dt = e.clipboardData;
+      if (!dt) { status.textContent = 'No clipboardData available.'; return; }
+
+      const items = await collectFromClipboardData(dt);
+      await sendItems(items);
+    });
+
+    // --- DRAG & DROP ---
+    ['dragenter','dragover'].forEach(evt =>
+      pasteArea.addEventListener(evt, (e) => {
+        e.preventDefault(); e.stopPropagation();
+        pasteArea.classList.add('dragover');
+      })
+    );
+    ['dragleave','drop'].forEach(evt =>
+      pasteArea.addEventListener(evt, (e) => {
+        e.preventDefault(); e.stopPropagation();
+        pasteArea.classList.remove('dragover');
+      })
+    );
+    pasteArea.addEventListener('drop', async (e) => {
+      if (sending) return;
+      clearUI();
+
+      const dt = e.dataTransfer;
+      if (!dt) { status.textContent = 'No dataTransfer available.'; return; }
+
+      const items = await collectFromDataTransfer(dt);
+      await sendItems(items);
+    });
+
+    // --- Collectors ---
+    async function collectFromClipboardData(dt) {
+      const itemsToSend = [];
+      // Prefer items API (kind: string/file)
+      if (dt.items && dt.items.length) {
+        for (const item of dt.items) {
+          if (item.kind === 'string') {
+            const type = item.type || 'text/plain';
+            const data = await new Promise(resolve => item.getAsString(resolve));
+            itemsToSend.push({ type, data });
+            renderPreview({ type, data });
+          } else if (item.kind === 'file') {
+            const file = item.getAsFile();
+            if (file) {
+              const type = file.type || 'application/octet-stream';
+              const buf  = await file.arrayBuffer();
+              const b64  = arrayBufferToBase64(buf);
+              itemsToSend.push({ type, data: b64, name: file.name });
+              renderPreview({ type, data: `[${type}] ${file.name} (${formatBytes(file.size)})`, file });
+            }
+          }
+        }
+      } else {
+        // Fallback—older APIs: just get plain text
+        const txt = dt.getData('text/plain');
+        if (txt) {
+          itemsToSend.push({ type: 'text/plain', data: txt });
+          renderPreview({ type: 'text/plain', data: txt });
+        }
+      }
+      return itemsToSend;
+    }
+
+    async function collectFromDataTransfer(dt) {
+      const itemsToSend = [];
+
+      // 1) Handle DataTransfer.items (text drops, etc.)
+      if (dt.items && dt.items.length) {
+        for (const item of dt.items) {
+          if (item.kind === 'string') {
+            // Most browsers expose only text/plain here
+            const type = item.type || 'text/plain';
+            const data = await new Promise(resolve => item.getAsString(resolve));
+            itemsToSend.push({ type, data });
+            renderPreview({ type, data });
+          }
+        }
+      }
+
+      // 2) Handle files list
+      if (dt.files && dt.files.length) {
+        for (const file of dt.files) {
+          const type = file.type || 'application/octet-stream';
+          const buf  = await file.arrayBuffer();
+          const b64  = arrayBufferToBase64(buf);
+          itemsToSend.push({ type, data: b64, name: file.name });
+          renderPreview({ type, data: `[${type}] ${file.name} (${formatBytes(file.size)})`, file });
+        }
+      }
+
+      // If nothing captured, try a last-resort plain text
+      if (itemsToSend.length === 0) {
+        const txt = dt.getData && dt.getData('text') || '';
+        if (txt) {
+          itemsToSend.push({ type: 'text/plain', data: txt });
+          renderPreview({ type: 'text/plain', data: txt });
+        }
+      }
+
+      return itemsToSend;
+    }
+
+    // --- Send ---
+    async function sendItems(itemsToSend) {
+      if (!itemsToSend.length) { status.textContent = 'Nothing captured.'; return; }
+      try {
+        sending = true;
+        status.textContent = `Sending ${itemsToSend.length} item(s)…`;
+        const res = await fetch('/api/clip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: itemsToSend, meta: { source: location.href } })
+        });
+        const json = await res.json();
+        status.textContent = (json && json.ok) ? `Sent. ID=${json.id}` : 'Send failed.';
+      } catch (err) {
+        console.error(err);
+        status.textContent = 'Error sending to server.';
+      } finally {
+        sending = false;
+      }
+    }
+
+    // --- Preview ---
+    function renderPreview(item) {
+      if (item.type === 'text/html') {
+        const div = document.createElement('div');
+        div.innerHTML = item.data;
+        preview.appendChild(div);
+      } else if (item.type.startsWith('text/')) {
+        const pre = document.createElement('pre');
+        pre.textContent = item.data;
+        preview.appendChild(pre);
+      } else if (item.type.startsWith('image/')) {
+        // show image preview (paste) or from dropped file
+        const img = document.createElement('img');
+        if (item.file) {
+          img.src = URL.createObjectURL(item.file);
+        } else {
+          // if image arrived as base64 from clipboard
+          img.src = `data:${item.type};base64,${item.data}`;
+        }
+        preview.appendChild(img);
+      } else {
+        const pre = document.createElement('pre');
+        pre.className = 'file-line';
+        pre.textContent = item.data; // "[mime] name (size)"
+        preview.appendChild(pre);
+      }
+    }
+
+    function clearUI() {
+      preview.innerHTML = '';
+      status.textContent = '';
+    }
+
+    // --- Utils ---
+    function arrayBufferToBase64(buf) {
+      const bytes = new Uint8Array(buf);
+      let binary = '';
+      // Chunked conversion to avoid call stack issues with large files
+      const chunk = 0x8000; // 32KB
+      for (let i = 0; i < bytes.length; i += chunk) {
+        const sub = bytes.subarray(i, i + chunk);
+        binary += String.fromCharCode.apply(null, sub);
+      }
+      return btoa(binary);
+    }
+
+    function formatBytes(n) {
+      if (n < 1024) return `${n} B`;
+      const units = ['KB','MB','GB','TB'];
+      let u = -1;
+      do { n /= 1024; ++u; } while (n >= 1024 && u < units.length - 1);
+      return `${n.toFixed(1)} ${units[u]}`;
+    }
+  </script>
+</body>
+</html>
