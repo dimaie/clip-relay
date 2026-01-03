@@ -1,5 +1,3 @@
-import { base64ToBlob } from './utils.js';
-
 /* -------------------- DOM -------------------- */
 
 const selectAllCheckbox = document.getElementById('selectAll');
@@ -14,7 +12,6 @@ deleteBtn.addEventListener('click', async () => {
   if (selectedIds.size === 0) return;
 
   const ids = Array.from(selectedIds);
-
   deleteStatus.textContent = 'Deleting…';
   deleteBtn.disabled = true;
 
@@ -27,7 +24,6 @@ deleteBtn.addEventListener('click', async () => {
 
     if (!res.ok) throw new Error('Delete failed');
 
-    // Remove from DOM
     for (const id of ids) {
       const el = clips.querySelector(`article[data-id="${id}"]`);
       if (el) el.remove();
@@ -46,25 +42,21 @@ deleteBtn.addEventListener('click', async () => {
 
 function getSelectedIds() {
   selectedIds.clear();
-  document
-    .querySelectorAll('#clips article')
-    .forEach(art => {
-      const id = Number(art.dataset.id);
-      const cb = art.querySelector('input[type=checkbox]');
-      if (cb.checked) selectedIds.add(id);
-    });
+  document.querySelectorAll('#clips article').forEach(art => {
+    const id = Number(art.dataset.id);
+    const cb = art.querySelector('input[type=checkbox]');
+    if (cb.checked) selectedIds.add(id);
+  });
 }
 
 selectAllCheckbox.addEventListener('change', () => {
   const checked = selectAllCheckbox.checked;
-  document
-    .querySelectorAll('#clips article')
-    .forEach(art => {
-      const id = Number(art.dataset.id);
-      const cb = art.querySelector('input[type=checkbox]');
-      cb.checked = checked;
-      if (checked) selectedIds.add(id);
-    });
+  document.querySelectorAll('#clips article').forEach(art => {
+    const id = Number(art.dataset.id);
+    const cb = art.querySelector('input[type=checkbox]');
+    cb.checked = checked;
+    if (checked) selectedIds.add(id);
+  });
   updateDeleteUI();
 });
 
@@ -72,13 +64,8 @@ selectAllCheckbox.addEventListener('change', () => {
 
 const socket = io({ transports: ['websocket', 'polling'] });
 
-socket.on('connect', () => {
-  status.textContent = 'Connected.';
-});
-
-socket.on('disconnect', () => {
-  status.textContent = 'Disconnected.';
-});
+socket.on('connect', () => { status.textContent = 'Connected.'; });
+socket.on('disconnect', () => { status.textContent = 'Disconnected.'; });
 
 socket.on('clip:update', data => {
   clips.innerHTML = '';
@@ -90,11 +77,7 @@ socket.on('clip:update', data => {
 /* -------------------- Clipboard policy -------------------- */
 
 const ALLOWED_CLIPBOARD_TYPES = new Set([
-  'text/plain',
-  'text/html',
-  'text/rtf',
-  'image/png',
-  'image/jpeg'
+  'text/plain', 'text/html', 'text/rtf', 'image/png', 'image/jpeg'
 ]);
 
 function isCopyableType(type) {
@@ -121,26 +104,18 @@ function renderEntry(entry, prepend) {
   art.dataset.id = entry.id;
 
   const header = document.createElement('div');
-
   const cb = document.createElement('input');
   cb.type = 'checkbox';
   cb.addEventListener('change', () => {
-    if (cb.checked) {
-      selectedIds.add(entry.id);
-    } else {
-      selectedIds.delete(entry.id);
-    }
+    if (cb.checked) selectedIds.add(entry.id);
+    else selectedIds.delete(entry.id);
     updateSelectAllUI();
     updateDeleteUI();
   });
 
   const ts = new Date(entry.timestamp).toLocaleString();
   header.appendChild(cb);
-  header.insertAdjacentHTML(
-    'beforeend',
-    ` <span class="id">ID ${entry.id}</span> — ${ts}`
-  );
-
+  header.insertAdjacentHTML('beforeend', ` <span class="id">ID ${entry.id}</span> — ${ts}`);
   art.appendChild(header);
 
   let hasCopyable = false;
@@ -154,19 +129,36 @@ function renderEntry(entry, prepend) {
     if (it.type === 'text/html') {
       hasCopyable = true;
       const div = document.createElement('div');
-      div.innerHTML = it.data;
+      if (it.data !== undefined) {
+        div.innerHTML = it.data;
+      } else if (it.path) {
+        fetch(`/data/${it.path}`)
+          .then(r => r.text())
+          .then(txt => { div.innerHTML = txt; })
+          .catch(() => { div.textContent = '[content unavailable]'; });
+      }
       art.appendChild(div);
 
     } else if (it.type.startsWith('text/')) {
       hasCopyable = true;
       const pre = document.createElement('pre');
-      pre.textContent = it.data;
+      if (it.data !== undefined) {
+        pre.textContent = it.data;
+      } else if (it.path) {
+        fetch(`/data/${it.path}`)
+          .then(r => r.text())
+          .then(txt => { pre.textContent = txt; })
+          .catch(() => { pre.textContent = '[content unavailable]'; });
+      } else {
+        pre.textContent = '[content unavailable]';
+      }
       art.appendChild(pre);
 
     } else if (it.type.startsWith('image/')) {
       hasCopyable = true;
       const img = document.createElement('img');
-      img.src = `data:${it.type};base64,${it.data}`;
+      if (it.path) img.src = `/data/${it.path}`;
+      else img.src = `[image missing]`;
       art.appendChild(img);
 
     } else {
@@ -178,8 +170,13 @@ function renderEntry(entry, prepend) {
       dlBtn.className = 'btn';
       dlBtn.textContent = 'Download';
       dlBtn.addEventListener('click', () => {
-        const name = it.name || `clip-${entry.id}-${idx}.bin`;
-        downloadBlob(name, it.data, it.type);
+        const url = `/data/${it.path}`;
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = it.name || url.split('/').pop();
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
       });
       art.appendChild(dlBtn);
     }
@@ -187,12 +184,10 @@ function renderEntry(entry, prepend) {
 
   const actions = document.createElement('div');
   actions.className = 'row-actions';
-
   if (hasCopyable) {
     const copyBtn = document.createElement('button');
     copyBtn.className = 'btn';
     copyBtn.textContent = 'Copy';
-
     const rowStatus = document.createElement('span');
     rowStatus.className = 'status';
 
@@ -214,11 +209,8 @@ function renderEntry(entry, prepend) {
 
   art.appendChild(actions);
 
-  if (prepend) {
-    clips.prepend(art);
-  } else {
-    clips.appendChild(art);
-  }
+  if (prepend) clips.prepend(art);
+  else clips.appendChild(art);
 }
 
 /* -------------------- Clipboard write -------------------- */
@@ -228,45 +220,37 @@ async function copyEntryToClipboard(entry) {
     try {
       const filteredMap = {};
       let hasAllowed = false;
-
       for (const it of entry.items) {
         if (!isCopyableType(it.type)) continue;
-
         if (it.type.startsWith('text/')) {
-          filteredMap[it.type] = new Blob(
-            [it.data],
-            { type: it.type }
-          );
+          if (it.data !== undefined) filteredMap[it.type] = new Blob([it.data], { type: it.type });
+          else if (it.path) {
+            const txt = await fetch(`/data/${it.path}`).then(r => r.text());
+            filteredMap[it.type] = new Blob([txt], { type: it.type });
+          }
           hasAllowed = true;
-
         } else if (it.type.startsWith('image/')) {
-          filteredMap[it.type] = base64ToBlob(it.data, it.type);
+          if (it.path) {
+            const blob = await fetch(`/data/${it.path}`).then(r => r.blob());
+            filteredMap[it.type] = blob;
+          }
           hasAllowed = true;
         }
       }
-
       if (hasAllowed) {
-        const item = new ClipboardItem(filteredMap);
-        await navigator.clipboard.write([item]);
+        await navigator.clipboard.write([new ClipboardItem(filteredMap)]);
         return;
       }
     } catch (err) {
-      console.warn(
-        'Full-fidelity copy failed, falling back:',
-        err
-      );
+      console.warn('Full-fidelity copy failed, falling back:', err);
     }
   }
 
   // fallback
   const htmlItem = entry.items.find(x => x.type === 'text/html');
-  const textItem =
-    entry.items.find(x => x.type === 'text/plain') ||
-    entry.items.find(x => x.type.startsWith('text/'));
-
+  const textItem = entry.items.find(x => x.type === 'text/plain') || entry.items.find(x => x.type.startsWith('text/'));
   const html = htmlItem ? htmlItem.data : null;
   const text = textItem ? textItem.data : '';
-
   await legacyCopy(text, html);
 }
 
@@ -283,7 +267,6 @@ function legacyCopy(text, html) {
       el.contentEditable = 'true';
       el.innerHTML = html;
       document.body.appendChild(el);
-
       const sel = window.getSelection();
       const range = document.createRange();
       range.selectNodeContents(el);
@@ -306,21 +289,7 @@ function legacyCopy(text, html) {
   });
 }
 
-/* -------------------- Download helper -------------------- */
-
-function downloadBlob(filename, base64, mime) {
-  const blob = base64ToBlob(base64, mime);
-  const url  = URL.createObjectURL(blob);
-
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename || 'clip.bin';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-
-  URL.revokeObjectURL(url);
-}
+/* -------------------- Helpers -------------------- */
 
 function updateDeleteUI() {
   getSelectedIds();
@@ -330,6 +299,5 @@ function updateDeleteUI() {
 function updateSelectAllUI() {
   const all = document.querySelectorAll('#clips article input[type=checkbox]');
   const checked = document.querySelectorAll('#clips article input[type=checkbox]:checked');
-
   selectAllCheckbox.checked = all.length > 0 && all.length === checked.length;
 }

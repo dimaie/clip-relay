@@ -1,4 +1,4 @@
-import { arrayBufferToBase64, formatBytes } from './utils.js';
+import { formatBytes } from './utils.js';
 
 const pasteArea = document.getElementById('pasteArea');
 const status    = document.getElementById('sendStatus');
@@ -60,9 +60,9 @@ function onDragLeave(e) {
             const file = item.getAsFile();
             if (file) {
               const type = file.type || 'application/octet-stream';
-              const buf  = await file.arrayBuffer();
-              const b64  = arrayBufferToBase64(buf);
-              itemsToSend.push({ type, data: b64, name: file.name });
+              const fileData = await file.arrayBuffer();
+              const uint8Array = new Uint8Array(fileData);
+              itemsToSend.push({ type, data: uint8Array, name: file.name });
               renderPreview({ type, data: `[${type}] ${file.name} (${formatBytes(file.size)})`, file });
             }
           }
@@ -99,8 +99,8 @@ function onDragLeave(e) {
         for (const file of dt.files) {
           const type = file.type || 'application/octet-stream';
           const buf  = await file.arrayBuffer();
-          const b64  = arrayBufferToBase64(buf);
-          itemsToSend.push({ type, data: b64, name: file.name });
+          const uint8Array = new Uint8Array(buf); // send as raw bytes
+          itemsToSend.push({ type, data: Array.from(uint8Array), name: file.name });
           renderPreview({ type, data: `[${type}] ${file.name} (${formatBytes(file.size)})`, file });
         }
       }

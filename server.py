@@ -2,11 +2,12 @@
 import os
 import json
 import time
-import base64
 import mimetypes
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_socketio import SocketIO
+from flask import send_file
+from flask import send_from_directory
 
 DATA_DIR = "data"
 
@@ -76,7 +77,7 @@ def save_entry_to_disk(entry):
 
     # write payloads
     for idx, it in enumerate(entry["items"]):
-        save_item(clip_dir, idx, it)
+        save_item(clip_dir, idx, it, entry["id"])
 
     # write metadata last
     meta_path = os.path.join(clip_dir, "meta.json")
@@ -84,21 +85,34 @@ def save_entry_to_disk(entry):
         json.dump(entry, f, indent=2)
 
 
-def save_item(clip_dir, idx, item):
+def save_item(clip_dir, idx, item, entry_id):
     itype = item["type"]
     name = item.get("name")
 
     if itype.startswith("text/"):
         fname = name or f"text_{idx}.txt"
-        with open(os.path.join(clip_dir, fname), "w", encoding="utf-8") as f:
+        file_path = os.path.join(clip_dir, fname)
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write(item["data"])
+        # Update metadata
+        item["path"] = os.path.join(f"{entry_id:06d}", fname)
+        item["size"] = len(item["data"])
+        # optional: remove inline text to save memory
+        del item["data"]
 
     else:
         ext = mimetypes.guess_extension(itype) or ".bin"
         fname = name or f"item_{idx}{ext}"
-        raw = base64.b64decode(item["data"])
-        with open(os.path.join(clip_dir, fname), "wb") as f:
+        file_path = os.path.join(clip_dir, fname)
+
+        # NEW: convert numeric array to bytes instead of Base64 decoding
+        raw = bytes(item["data"])
+        with open(file_path, "wb") as f:
             f.write(raw)
+
+        item["path"] = os.path.join(f"{entry_id:06d}", fname)
+        item["size"] = len(raw)
+        del item["data"]
 
 def rebuild_store_and_broadcast():
     global store
@@ -106,6 +120,21 @@ def rebuild_store_and_broadcast():
     socketio.emit("clip:update", {"store": list(reversed(store))})
 
 # ---------- API ----------
+@app.route("/data/<path:filename>")
+def serve_data(filename):
+    # Serve files from the DATA_DIR directory
+    return send_from_directory(DATA_DIR, filename)
+
+
+@app.route("/api/clip/<int:cid>/item/<path:filename>")
+def serve_clip_file(cid, filename):
+    clip_dir = os.path.join(DATA_DIR, f"{cid:06d}")
+    file_path = os.path.join(clip_dir, filename)
+    if not os.path.isfile(file_path):
+        return jsonify({"error": "File not found"}), 404
+
+    mime_type, _ = mimetypes.guess_type(file_path)
+    return send_file(file_path, mimetype=mime_type or "application/octet-stream")
 
 @app.route("/api/clip", methods=["GET"])
 def list_clips():
