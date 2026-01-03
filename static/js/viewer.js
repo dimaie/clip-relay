@@ -4,6 +4,44 @@ import { base64ToBlob } from './utils.js';
 
 const status = document.getElementById('status');
 const clips  = document.getElementById('clips');
+const deleteBtn     = document.getElementById('deleteBtn');
+const deleteStatus  = document.getElementById('deleteStatus');
+
+const selectedIds = new Set();
+
+deleteBtn.addEventListener('click', async () => {
+  if (selectedIds.size === 0) return;
+
+  const ids = Array.from(selectedIds);
+
+  deleteStatus.textContent = 'Deleting…';
+  deleteBtn.disabled = true;
+
+  try {
+    const res = await fetch('/api/clip', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+
+    if (!res.ok) throw new Error('Delete failed');
+
+    // Remove from DOM
+    for (const id of ids) {
+      const el = clips.querySelector(`article[data-id="${id}"]`);
+      if (el) el.remove();
+      selectedIds.delete(id);
+    }
+
+    deleteStatus.textContent = 'Deleted.';
+  } catch (err) {
+    console.error(err);
+    deleteStatus.textContent = 'Delete failed.';
+  } finally {
+    updateDeleteUI();
+    setTimeout(() => { deleteStatus.textContent = ''; }, 2000);
+  }
+});
 
 /* -------------------- Socket.IO -------------------- */
 
@@ -17,8 +55,9 @@ socket.on('disconnect', () => {
   status.textContent = 'Disconnected.';
 });
 
-socket.on('clip:new', entry => {
-  renderEntry(entry, true);
+socket.on('clip:update', data => {
+  clips.innerHTML = '';
+  data.store.forEach(e => renderEntry(e, false));
 });
 
 /* -------------------- Clipboard policy -------------------- */
@@ -49,10 +88,28 @@ async function loadHistory() {
 
 function renderEntry(entry, prepend) {
   const art = document.createElement('article');
+  art.dataset.id = entry.id;
+
+  const header = document.createElement('div');
+
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.addEventListener('change', () => {
+    if (cb.checked) {
+      selectedIds.add(entry.id);
+    } else {
+      selectedIds.delete(entry.id);
+    }
+    updateDeleteUI();
+  });
 
   const ts = new Date(entry.timestamp).toLocaleString();
-  const header = document.createElement('div');
-  header.innerHTML = `<span class="id">ID ${entry.id}</span> — ${ts}`;
+  header.appendChild(cb);
+  header.insertAdjacentHTML(
+    'beforeend',
+    ` <span class="id">ID ${entry.id}</span> — ${ts}`
+  );
+
   art.appendChild(header);
 
   let hasCopyable = false;
@@ -232,4 +289,8 @@ function downloadBlob(filename, base64, mime) {
   a.remove();
 
   URL.revokeObjectURL(url);
+}
+
+function updateDeleteUI() {
+  deleteBtn.disabled = selectedIds.size === 0;
 }

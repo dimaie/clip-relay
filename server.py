@@ -19,6 +19,21 @@ store = []
 
 
 # ---------- filesystem helpers ----------
+def delete_entry_from_disk(cid: int):
+    cid_str = f"{cid:06d}"
+    clip_dir = os.path.join(DATA_DIR, cid_str)
+
+    if not os.path.isdir(clip_dir):
+        return False
+
+    # remove files first
+    for name in os.listdir(clip_dir):
+        path = os.path.join(clip_dir, name)
+        if os.path.isfile(path):
+            os.remove(path)
+
+    os.rmdir(clip_dir)
+    return True
 
 def ensure_data_dir():
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -85,6 +100,10 @@ def save_item(clip_dir, idx, item):
         with open(os.path.join(clip_dir, fname), "wb") as f:
             f.write(raw)
 
+def rebuild_store_and_broadcast():
+    global store
+    store = load_history_from_disk()
+    socketio.emit("clip:update", {"store": store})
 
 # ---------- API ----------
 
@@ -119,11 +138,44 @@ def post_clip():
     }
 
     save_entry_to_disk(entry)
-    store.append(entry)
-
-    socketio.emit("clip:new", entry)
+    rebuild_store_and_broadcast()  # rebuild from disk + broadcast
     return jsonify({"ok": True, "id": entry["id"]})
 
+@app.route("/api/clip", methods=["DELETE"])
+def delete_clips():
+    payload = request.get_json(force=True) or {}
+    ids = payload.get("ids", [])
+
+    if not isinstance(ids, list):
+        return jsonify({"ok": False, "error": "ids must be a list"}), 400
+
+    deleted = []
+    failed = []
+
+    global store
+
+    for cid in ids:
+        try:
+            removed = delete_entry_from_disk(int(cid))
+            if removed:
+                deleted.append(int(cid))
+        except Exception as e:
+            failed.append(int(cid))
+
+    if failed:
+        return jsonify({
+            "ok": False,
+            "deleted": deleted,
+            "failed": failed
+        }), 500
+
+    # rebuild and broadcast
+    rebuild_store_and_broadcast()
+
+    return jsonify({
+        "ok": True,
+        "deleted": deleted
+    })
 
 # ---------- static ----------
 
