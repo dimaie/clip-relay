@@ -4,7 +4,6 @@ import { base64ToBlob } from './utils.js';
 
 const status = document.getElementById('status');
 const clips  = document.getElementById('clips');
-const refreshBtn = document.getElementById('refreshBtn');
 
 /* -------------------- Socket.IO -------------------- */
 
@@ -22,10 +21,6 @@ socket.on('clip:new', entry => {
   renderEntry(entry, true);
 });
 
-/* -------------------- Events -------------------- */
-
-refreshBtn.addEventListener('click', loadHistory);
-
 /* -------------------- Clipboard policy -------------------- */
 
 const ALLOWED_CLIPBOARD_TYPES = new Set([
@@ -42,13 +37,14 @@ function isCopyableType(type) {
 
 /* -------------------- Data loading -------------------- */
 
+loadHistory();
+
 async function loadHistory() {
   const res = await fetch('/api/clip');
   const all = await res.json();
   clips.innerHTML = '';
-  all.slice().reverse().forEach(e => renderEntry(e, false));
+  all.forEach(e => renderEntry(e, false));
 }
-
 /* -------------------- Rendering -------------------- */
 
 function renderEntry(entry, prepend) {

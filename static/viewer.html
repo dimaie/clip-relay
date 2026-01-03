@@ -12,15 +12,12 @@
     .id { font-weight: bold; }
     .type { color:#666; }
     .row-actions { margin-top:.5rem; display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
-    .btn { cursor:pointer; padding:.35rem .6rem; border:1px solid #888; border-radius:4px; background:#f7f7f7; }
-    .btn:active { transform: translateY(1px); }
     .status { color:#444; font-size:.9rem; margin-left:.25rem; }
   </style>
 </head>
 <body>
   <h1>Clipboard Viewer</h1>
   <div id="status">Connecting…</div>
-  <button id="refreshBtn" class="btn">Load History</button>
   <section id="clips"></section>
 
   <!-- Local Socket.IO client -->
