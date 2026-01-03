@@ -103,7 +103,7 @@ def save_item(clip_dir, idx, item):
 def rebuild_store_and_broadcast():
     global store
     store = load_history_from_disk()
-    socketio.emit("clip:update", {"store": store})
+    socketio.emit("clip:update", {"store": list(reversed(store))})
 
 # ---------- API ----------
 

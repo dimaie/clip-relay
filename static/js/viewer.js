@@ -2,6 +2,7 @@ import { base64ToBlob } from './utils.js';
 
 /* -------------------- DOM -------------------- */
 
+const selectAllCheckbox = document.getElementById('selectAll');
 const status = document.getElementById('status');
 const clips  = document.getElementById('clips');
 const deleteBtn     = document.getElementById('deleteBtn');
@@ -43,6 +44,30 @@ deleteBtn.addEventListener('click', async () => {
   }
 });
 
+function getSelectedIds() {
+  selectedIds.clear();
+  document
+    .querySelectorAll('#clips article')
+    .forEach(art => {
+      const id = Number(art.dataset.id);
+      const cb = art.querySelector('input[type=checkbox]');
+      if (cb.checked) selectedIds.add(id);
+    });
+}
+
+selectAllCheckbox.addEventListener('change', () => {
+  const checked = selectAllCheckbox.checked;
+  document
+    .querySelectorAll('#clips article')
+    .forEach(art => {
+      const id = Number(art.dataset.id);
+      const cb = art.querySelector('input[type=checkbox]');
+      cb.checked = checked;
+      if (checked) selectedIds.add(id);
+    });
+  updateDeleteUI();
+});
+
 /* -------------------- Socket.IO -------------------- */
 
 const socket = io({ transports: ['websocket', 'polling'] });
@@ -58,6 +83,8 @@ socket.on('disconnect', () => {
 socket.on('clip:update', data => {
   clips.innerHTML = '';
   data.store.forEach(e => renderEntry(e, false));
+  updateSelectAllUI();
+  updateDeleteUI();
 });
 
 /* -------------------- Clipboard policy -------------------- */
@@ -83,7 +110,10 @@ async function loadHistory() {
   const all = await res.json();
   clips.innerHTML = '';
   all.forEach(e => renderEntry(e, false));
+  updateSelectAllUI();
+  updateDeleteUI();
 }
+
 /* -------------------- Rendering -------------------- */
 
 function renderEntry(entry, prepend) {
@@ -100,6 +130,7 @@ function renderEntry(entry, prepend) {
     } else {
       selectedIds.delete(entry.id);
     }
+    updateSelectAllUI();
     updateDeleteUI();
   });
 
@@ -292,5 +323,13 @@ function downloadBlob(filename, base64, mime) {
 }
 
 function updateDeleteUI() {
+  getSelectedIds();
   deleteBtn.disabled = selectedIds.size === 0;
+}
+
+function updateSelectAllUI() {
+  const all = document.querySelectorAll('#clips article input[type=checkbox]');
+  const checked = document.querySelectorAll('#clips article input[type=checkbox]:checked');
+
+  selectAllCheckbox.checked = all.length > 0 && all.length === checked.length;
 }
