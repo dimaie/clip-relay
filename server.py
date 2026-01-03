@@ -157,17 +157,60 @@ def get_clip(cid):
 
 @app.route("/api/clip", methods=["POST"])
 def post_clip():
-    payload = request.get_json(force=True) or {}
-
     entry = {
         "id": next_id(),
         "timestamp": int(time.time() * 1000),
-        "items": payload.get("items", []),
-        "meta": payload.get("meta", {})
+        "items": [],
+        "meta": {}
     }
 
-    save_entry_to_disk(entry)
-    rebuild_store_and_broadcast()  # rebuild from disk + broadcast
+    # 1️⃣ handle FormData files
+    if request.files:
+        source = request.form.get("source", "")
+        entry["meta"]["source"] = source
+
+        cid_str = f"{entry['id']:06d}"
+        clip_dir = os.path.join(DATA_DIR, cid_str)
+        os.makedirs(clip_dir, exist_ok=True)
+
+        for idx, file in enumerate(request.files.getlist("files")):
+            fname = file.filename
+            path = os.path.join(clip_dir, fname)
+            file.save(path)
+            entry["items"].append({
+                "type": file.mimetype,
+                "name": fname,
+                "path": os.path.join(cid_str, fname),
+                "size": os.path.getsize(path)
+            })
+
+    # 2️⃣ handle JSON payload (text items)
+    elif request.is_json:
+        payload = request.get_json()
+        entry["meta"] = payload.get("meta", {})
+        cid_str = f"{entry['id']:06d}"
+        clip_dir = os.path.join(DATA_DIR, cid_str)
+        os.makedirs(clip_dir, exist_ok=True)
+
+        for idx, item in enumerate(payload.get("items", [])):
+            itype = item["type"]
+            name = item.get("name") or f"text_{idx}.txt"
+            file_path = os.path.join(clip_dir, name)
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(item["data"])
+            entry["items"].append({
+                "type": itype,
+                "name": name,
+                "path": os.path.join(cid_str, name),
+                "size": len(item["data"])
+            })
+
+    # 3️⃣ write metadata
+    meta_path = os.path.join(clip_dir, "meta.json")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(entry, f, indent=2)
+
+    rebuild_store_and_broadcast()
     return jsonify({"ok": True, "id": entry["id"]})
 
 @app.route("/api/clip", methods=["DELETE"])

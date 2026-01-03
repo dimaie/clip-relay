@@ -45,129 +45,160 @@ function onDragLeave(e) {
   pasteArea.classList.remove('dragover');
 }
 
-    // --- Collectors ---
-    async function collectFromClipboardData(dt) {
-      const itemsToSend = [];
-      // Prefer items API (kind: string/file)
-      if (dt.items && dt.items.length) {
-        for (const item of dt.items) {
-          if (item.kind === 'string') {
-            const type = item.type || 'text/plain';
-            const data = await new Promise(resolve => item.getAsString(resolve));
-            itemsToSend.push({ type, data });
-            renderPreview({ type, data });
-          } else if (item.kind === 'file') {
-            const file = item.getAsFile();
-            if (file) {
-              const type = file.type || 'application/octet-stream';
-              const fileData = await file.arrayBuffer();
-              const uint8Array = new Uint8Array(fileData);
-              itemsToSend.push({ type, data: uint8Array, name: file.name });
-              renderPreview({ type, data: `[${type}] ${file.name} (${formatBytes(file.size)})`, file });
-            }
-          }
+// --- Collectors ---
+async function collectFromClipboardData(dt) {
+  const itemsToSend = [];
+  if (dt.items && dt.items.length) {
+    for (const item of dt.items) {
+      if (item.kind === 'string') {
+        const type = item.type || 'text/plain';
+        const data = await new Promise(resolve => item.getAsString(resolve));
+        itemsToSend.push({ type, data });
+        renderPreview({ type, data });
+      } else if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file) {
+          itemsToSend.push({ type: file.type, file, name: file.name });
+          renderPreview({
+            type: file.type,
+            data: `[${file.type}] ${file.name} (${formatBytes(file.size)})`,
+            file
+          });
         }
-      } else {
-        // Fallback—older APIs: just get plain text
-        const txt = dt.getData('text/plain');
-        if (txt) {
-          itemsToSend.push({ type: 'text/plain', data: txt });
-          renderPreview({ type: 'text/plain', data: txt });
-        }
-      }
-      return itemsToSend;
-    }
-
-    async function collectFromDataTransfer(dt) {
-      const itemsToSend = [];
-
-      // 1) Handle DataTransfer.items (text drops, etc.)
-      if (dt.items && dt.items.length) {
-        for (const item of dt.items) {
-          if (item.kind === 'string') {
-            // Most browsers expose only text/plain here
-            const type = item.type || 'text/plain';
-            const data = await new Promise(resolve => item.getAsString(resolve));
-            itemsToSend.push({ type, data });
-            renderPreview({ type, data });
-          }
-        }
-      }
-
-      // 2) Handle files list
-      if (dt.files && dt.files.length) {
-        for (const file of dt.files) {
-          const type = file.type || 'application/octet-stream';
-          const buf  = await file.arrayBuffer();
-          const uint8Array = new Uint8Array(buf); // send as raw bytes
-          itemsToSend.push({ type, data: Array.from(uint8Array), name: file.name });
-          renderPreview({ type, data: `[${type}] ${file.name} (${formatBytes(file.size)})`, file });
-        }
-      }
-
-      // If nothing captured, try a last-resort plain text
-      if (itemsToSend.length === 0) {
-        const txt = dt.getData && dt.getData('text') || '';
-        if (txt) {
-          itemsToSend.push({ type: 'text/plain', data: txt });
-          renderPreview({ type: 'text/plain', data: txt });
-        }
-      }
-
-      return itemsToSend;
-    }
-
-    // --- Send ---
-    async function sendItems(itemsToSend) {
-      if (!itemsToSend.length) { status.textContent = 'Nothing captured.'; return; }
-      try {
-        sending = true;
-        status.textContent = `Sending ${itemsToSend.length} item(s)…`;
-        const res = await fetch('/api/clip', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: itemsToSend, meta: { source: location.href } })
-        });
-        const json = await res.json();
-        status.textContent = (json && json.ok) ? `Sent. ID=${json.id}` : 'Send failed.';
-      } catch (err) {
-        console.error(err);
-        status.textContent = 'Error sending to server.';
-      } finally {
-        sending = false;
       }
     }
+  } else {
+    const txt = dt.getData('text/plain');
+    if (txt) {
+      itemsToSend.push({ type: 'text/plain', data: txt });
+      renderPreview({ type: 'text/plain', data: txt });
+    }
+  }
+  return itemsToSend;
+}
 
-    // --- Preview ---
-    function renderPreview(item) {
-      if (item.type === 'text/html') {
-        const div = document.createElement('div');
-        div.innerHTML = item.data;
-        preview.appendChild(div);
-      } else if (item.type.startsWith('text/')) {
-        const pre = document.createElement('pre');
-        pre.textContent = item.data;
-        preview.appendChild(pre);
-      } else if (item.type.startsWith('image/')) {
-        // show image preview (paste) or from dropped file
-        const img = document.createElement('img');
-        if (item.file) {
-          img.src = URL.createObjectURL(item.file);
-        } else {
-          // if image arrived as base64 from clipboard
-          img.src = `data:${item.type};base64,${item.data}`;
-        }
-        preview.appendChild(img);
-      } else {
-        const pre = document.createElement('pre');
-        pre.className = 'file-line';
-        pre.textContent = item.data; // "[mime] name (size)"
-        preview.appendChild(pre);
+async function collectFromDataTransfer(dt) {
+  const itemsToSend = [];
+
+  // 1) Handle DataTransfer.items (text drops)
+  if (dt.items && dt.items.length) {
+    for (const item of dt.items) {
+      if (item.kind === 'string') {
+        const type = item.type || 'text/plain';
+        const data = await new Promise(resolve => item.getAsString(resolve));
+        itemsToSend.push({ type, data });
+        renderPreview({ type, data });
       }
     }
+  }
 
-    function clearUI() {
-      preview.innerHTML = '';
-      status.textContent = '';
+  // 2) Handle files list
+  if (dt.files && dt.files.length) {
+    for (const file of dt.files) {
+      itemsToSend.push({ type: file.type || 'application/octet-stream', file, name: file.name });
+      renderPreview({
+        type: file.type || 'application/octet-stream',
+        data: `[${file.type || 'application/octet-stream'}] ${file.name} (${formatBytes(file.size)})`,
+        file
+      });
+    }
+  }
+
+  // 3) Last-resort plain text
+  if (itemsToSend.length === 0) {
+    const txt = dt.getData && dt.getData('text') || '';
+    if (txt) {
+      itemsToSend.push({ type: 'text/plain', data: txt });
+      renderPreview({ type: 'text/plain', data: txt });
+    }
+  }
+
+  return itemsToSend;
+}
+
+// --- Send ---
+async function sendItems(itemsToSend) {
+  if (!itemsToSend.length) {
+    status.textContent = 'Nothing captured.';
+    return;
+  }
+
+  sending = true;
+  status.textContent = `Sending ${itemsToSend.length} item(s)…`;
+
+  try {
+    const files = itemsToSend.filter(i => i.file);   // actual File objects
+    const texts = itemsToSend.filter(i => !i.file);  // plain text/html
+
+    let res;
+
+    if (files.length) {
+      // FormData for files, plus JSON text items
+      const form = new FormData();
+      form.append('source', location.href);
+
+      files.forEach(item => form.append('files', item.file, item.name));
+
+      if (texts.length) {
+        // embed text items as JSON
+        form.append('items', JSON.stringify(texts.map(i => ({
+          type: i.type,
+          data: i.data,
+          name: i.name
+        }))));
+      }
+
+      res = await fetch('/api/clip', { method: 'POST', body: form });
+    } else {
+      // only text → send JSON
+      const payload = {
+        items: texts.map(i => ({ type: i.type, data: i.data, name: i.name })),
+        meta: { source: location.href }
+      };
+      res = await fetch('/api/clip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
     }
 
+    const json = await res.json();
+    status.textContent = (json && json.ok) ? `Sent. ID=${json.id}` : 'Send failed.';
+  } catch (err) {
+    console.error(err);
+    status.textContent = 'Error sending to server.';
+  } finally {
+    sending = false;
+  }
+}
+
+// --- Preview ---
+function renderPreview(item) {
+  if (item.type === 'text/html') {
+    const div = document.createElement('div');
+    div.innerHTML = item.data;
+    preview.appendChild(div);
+  } else if (item.type.startsWith('text/')) {
+    const pre = document.createElement('pre');
+    pre.textContent = item.data;
+    preview.appendChild(pre);
+  } else if (item.type.startsWith('image/')) {
+    const img = document.createElement('img');
+    if (item.file) {
+      img.src = URL.createObjectURL(item.file);
+    } else {
+      img.src = `data:${item.type};base64,${item.data}`;
+    }
+    preview.appendChild(img);
+  } else {
+    const pre = document.createElement('pre');
+    pre.className = 'file-line';
+    pre.textContent = item.data;
+    preview.appendChild(pre);
+  }
+}
+
+function clearUI() {
+  preview.innerHTML = '';
+  status.textContent = '';
+}
