@@ -1,7 +1,7 @@
 import { arrayBufferToBase64, formatBytes } from './utils.js';
 
 const pasteArea = document.getElementById('pasteArea');
-const status    = document.getElementById('status');
+const status    = document.getElementById('sendStatus');
 const preview   = document.getElementById('preview');
 
 let sending = false;
