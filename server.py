@@ -8,6 +8,14 @@ from flask_cors import CORS
 from flask_socketio import SocketIO
 from flask import send_file
 from flask import send_from_directory
+import logging
+import sys
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+log = logging.getLogger("clip-relay")
 
 DATA_DIR = "data"
 
@@ -262,8 +270,37 @@ def viewer():
 
 
 # ---------- startup ----------
+def require_tls_certificates(certfile: str, keyfile: str):
+    missing = []
+
+    if not os.path.isfile(certfile):
+        missing.append(certfile)
+    if not os.path.isfile(keyfile):
+        missing.append(keyfile)
+
+    if missing:
+        log.error("HTTPS startup aborted.")
+        for f in missing:
+            log.error("Missing TLS file: %s", os.path.abspath(f))
+        sys.exit(1)
+
+    log.info("HTTPS enabled")
+    log.info("Using TLS certificate: %s", os.path.abspath(certfile))
+    log.info("Using TLS private key: %s", os.path.abspath(keyfile))
 
 if __name__ == "__main__":
     ensure_data_dir()
     store = load_history_from_disk()
-    socketio.run(app, host="0.0.0.0", port=8080)
+
+    CERT_FILE = "cert.pem"
+    KEY_FILE = "key.pem"
+
+    require_tls_certificates(CERT_FILE, KEY_FILE)
+
+    socketio.run(
+        app,
+        host="0.0.0.0",
+        port=8080,
+        certfile=CERT_FILE,
+        keyfile=KEY_FILE,
+    )
