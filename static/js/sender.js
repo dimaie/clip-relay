@@ -2,7 +2,6 @@ import { formatBytes } from './utils.js';
 
 const pasteArea = document.getElementById('pasteArea');
 const status    = document.getElementById('sendStatus');
-const preview   = document.getElementById('preview');
 
 let sending = false;
 
@@ -54,16 +53,10 @@ async function collectFromClipboardData(dt) {
         const type = item.type || 'text/plain';
         const data = await new Promise(resolve => item.getAsString(resolve));
         itemsToSend.push({ type, data });
-        renderPreview({ type, data });
       } else if (item.kind === 'file') {
         const file = item.getAsFile();
         if (file) {
           itemsToSend.push({ type: file.type, file, name: file.name });
-          renderPreview({
-            type: file.type,
-            data: `[${file.type}] ${file.name} (${formatBytes(file.size)})`,
-            file
-          });
         }
       }
     }
@@ -71,7 +64,6 @@ async function collectFromClipboardData(dt) {
     const txt = dt.getData('text/plain');
     if (txt) {
       itemsToSend.push({ type: 'text/plain', data: txt });
-      renderPreview({ type: 'text/plain', data: txt });
     }
   }
   return itemsToSend;
@@ -87,7 +79,6 @@ async function collectFromDataTransfer(dt) {
         const type = item.type || 'text/plain';
         const data = await new Promise(resolve => item.getAsString(resolve));
         itemsToSend.push({ type, data });
-        renderPreview({ type, data });
       }
     }
   }
@@ -96,11 +87,6 @@ async function collectFromDataTransfer(dt) {
   if (dt.files && dt.files.length) {
     for (const file of dt.files) {
       itemsToSend.push({ type: file.type || 'application/octet-stream', file, name: file.name });
-      renderPreview({
-        type: file.type || 'application/octet-stream',
-        data: `[${file.type || 'application/octet-stream'}] ${file.name} (${formatBytes(file.size)})`,
-        file
-      });
     }
   }
 
@@ -109,7 +95,6 @@ async function collectFromDataTransfer(dt) {
     const txt = dt.getData && dt.getData('text') || '';
     if (txt) {
       itemsToSend.push({ type: 'text/plain', data: txt });
-      renderPreview({ type: 'text/plain', data: txt });
     }
   }
 
@@ -172,33 +157,6 @@ async function sendItems(itemsToSend) {
   }
 }
 
-// --- Preview ---
-function renderPreview(item) {
-  if (item.type === 'text/html') {
-    const div = document.createElement('div');
-    div.innerHTML = item.data;
-    preview.appendChild(div);
-  } else if (item.type.startsWith('text/')) {
-    const pre = document.createElement('pre');
-    pre.textContent = item.data;
-    preview.appendChild(pre);
-  } else if (item.type.startsWith('image/')) {
-    const img = document.createElement('img');
-    if (item.file) {
-      img.src = URL.createObjectURL(item.file);
-    } else {
-      img.src = `data:${item.type};base64,${item.data}`;
-    }
-    preview.appendChild(img);
-  } else {
-    const pre = document.createElement('pre');
-    pre.className = 'file-line';
-    pre.textContent = item.data;
-    preview.appendChild(pre);
-  }
-}
-
 function clearUI() {
-  preview.innerHTML = '';
   status.textContent = '';
 }
