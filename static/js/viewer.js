@@ -163,7 +163,7 @@ function renderEntry(entry, prepend) {
 
     } else {
       const pre = document.createElement('pre');
-      pre.textContent = `[${it.type}] (binary content)`;
+      pre.textContent = `[${it.type}], ${it.name} (binary content)`;
       art.appendChild(pre);
 
       const dlBtn = document.createElement('button');
