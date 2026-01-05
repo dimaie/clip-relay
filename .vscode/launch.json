@@ -1,0 +1,30 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: SocketIO App",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}", 
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [],
+            "env": {
+                "PYTHONUNBUFFERED": "1"
+            }
+        },
+        {
+            "name": "JS: Debug Frontend",
+            "type": "chrome",
+            "request": "launch",
+            "url": "https://192.168.2.103:8080",
+            "webRoot": "${workspaceFolder}/static" 
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Full Stack Debug",
+            "configurations": ["Python: SocketIO App", "JS: Debug Frontend"]
+        }
+    ]
+}

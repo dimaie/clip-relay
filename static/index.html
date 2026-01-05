@@ -3,104 +3,10 @@
 <head>
   <meta charset="utf-8">
   <title>Clipboard Console</title>
-
-  <style>
-    body {
-      font-family: system-ui, Arial, sans-serif;
-      margin: 2rem;
-    }
-
-    h1 {
-      margin-bottom: 0.5rem;
-    }
-
-    section {
-      margin-top: 2rem;
-    }
-
-    /* ---------- Sender ---------- */
-
-    #pasteArea {
-      height: 10rem;
-      border: 2px dashed #888;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: border-color .15s ease;
-    }
-
-    #pasteArea.dragover {
-      border-color: #2a7;
-      background: #f6fff6;
-    }
-
-    #sendStatus, #preview {
-      margin-top: 1rem;
-    }
-
-    img {
-      max-width: 400px;
-      display: block;
-      margin-top: 0.5rem;
-    }
-
-    code {
-      background: #f5f5f5;
-      padding: 0.2rem 0.4rem;
-    }
-
-    .file-line {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-    }
-
-    /* ---------- Viewer ---------- */
-
-    article {
-      border: 1px solid #ddd;
-      padding: 1rem;
-      margin-bottom: 1rem;
-    }
-
-    pre {
-      background: #f5f5f5;
-      padding: 0.5rem;
-      overflow-x: auto;
-    }
-
-    .id {
-      font-weight: bold;
-    }
-
-    .type {
-      color: #666;
-    }
-
-    .row-actions {
-      margin-top: .5rem;
-      display: flex;
-      align-items: center;
-      gap: .5rem;
-      flex-wrap: wrap;
-    }
-
-    .btn {
-      cursor: pointer;
-      padding: .35rem .6rem;
-      border: 1px solid #888;
-      border-radius: 4px;
-      background: #f7f7f7;
-    }
-
-    .btn:active {
-      transform: translateY(1px);
-    }
-
-    .status {
-      color: #444;
-      font-size: .9rem;
-      margin-left: .25rem;
-    }
-  </style>
+<head>
+  <meta charset="utf-8">
+  <title>Clipboard Console</title>
+  <link rel="stylesheet" href="/static/css/style.css">
 </head>
 
 <body>
@@ -112,8 +18,12 @@
   <section id="sender">
     <h2>Send</h2>
     <!-- Description field -->
-    <label for="clipDescription">Description (optional):</label>
-    <textarea id="clipDescription" rows="3" placeholder="Optional description…"></textarea>    
+     <p>
+      <div>
+        <label for="clipDescription">Description (optional):</label>
+      </div>
+      <textarea id="clipDescription" class="description-box" rows="3" placeholder="Optional description…"></textarea>    
+    </p>
     <p>
       Click the box, then <strong>paste</strong>
       (<code>Ctrl+V</code>/<code>Cmd+V</code>)

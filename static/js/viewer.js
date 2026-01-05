@@ -113,8 +113,21 @@ function renderDescription(entry, container) {
   // textarea (read-only initially, so it can receive focus)
   const textarea = document.createElement('textarea');
   textarea.rows = 3;
-  textarea.style.flex = '1';
-  textarea.value = descItem.data || '';
+  textarea.id = "descId" + entry.id;
+  textarea.className = 'description-box';
+
+  // retrieve description
+  if (descItem.data !== undefined) {
+    textarea.value = descItem.data;
+  } else if (descItem.path) {
+    fetch(`/data/${descItem.path}`)
+      .then(r => r.text())
+      .then(txt => { textarea.value = txt; })
+      .catch(() => { textarea.value = '[description unavailable]'; });
+  } else {
+    textarea.value = '[description unavailable]';
+  }
+
   textarea.readOnly = true; // initially not editable
   wrapper.appendChild(textarea);
 
@@ -186,7 +199,9 @@ function renderEntry(entry, prepend) {
     t.textContent = it.type;
     art.appendChild(t);
 
-    if (it.type === 'text/html') {
+    if (it.type === 'text/description') {
+      renderDescription(entry, art);
+    } else if (it.type === 'text/html') {
       hasCopyable = true;
       const div = document.createElement('div');
       if (it.data !== undefined) {
@@ -241,8 +256,6 @@ function renderEntry(entry, prepend) {
       art.appendChild(dlBtn);
     }
   });
-
-  renderDescription(entry, art);
 
   const actions = document.createElement('div');
   actions.className = 'row-actions';

@@ -12,7 +12,7 @@ import logging
 import sys
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 log = logging.getLogger("clip-relay")
@@ -53,6 +53,7 @@ def delete_entry_from_disk(cid: int):
 
 def ensure_data_dir():
     os.makedirs(DATA_DIR, exist_ok=True)
+    log.info("Using data directory: %s", os.path.abspath(DATA_DIR))
 
 
 def load_history_from_disk():
@@ -217,8 +218,8 @@ def post_clip():
                 "data": description_text,
                 "name": "description.txt"
             })
-
-        for idx, item in enumerate(payload.get("items", [])):
+        entry["items"].extend(payload.get("items", []))
+        for idx, item in enumerate(entry["items"]):
             save_item(clip_dir, idx, item, entry["id"])
 
     # 3️⃣ write metadata
@@ -337,7 +338,6 @@ def require_tls_certificates(certfile: str, keyfile: str):
     log.info("Using TLS private key: %s", os.path.abspath(keyfile))
 
 if __name__ == "__main__":
-    ensure_data_dir()
     store = load_history_from_disk()
 
     CERT_FILE = "cert.pem"
