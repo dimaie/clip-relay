@@ -98,6 +98,66 @@ async function loadHistory() {
 }
 
 /* -------------------- Rendering -------------------- */
+function renderDescription(entry, container) {
+  const descItem = entry.items.find(it => it.type === 'text/description');
+  if (!descItem) return;
+
+  // wrapper for layout
+  const wrapper = document.createElement('div');
+  wrapper.className = 'description-wrapper';
+  wrapper.style.display = 'flex';
+  wrapper.style.alignItems = 'flex-start';
+  wrapper.style.gap = '0.5rem';
+  wrapper.style.marginTop = '0.5rem';
+
+  // textarea (read-only initially, so it can receive focus)
+  const textarea = document.createElement('textarea');
+  textarea.rows = 3;
+  textarea.style.flex = '1';
+  textarea.value = descItem.data || '';
+  textarea.readOnly = true; // initially not editable
+  wrapper.appendChild(textarea);
+
+  // Edit button
+  const editBtn = document.createElement('button');
+  editBtn.className = 'btn editDescBtn';
+  editBtn.textContent = 'Edit';
+  editBtn.disabled = true; // initially disabled
+  wrapper.appendChild(editBtn);
+
+  // Enable editing on focus/click
+  textarea.addEventListener('focus', () => {
+    textarea.readOnly = false;
+    editBtn.disabled = false;
+  });
+
+  // Submit updated description
+  editBtn.addEventListener('click', async () => {
+    const newText = textarea.value;
+    textarea.readOnly = true;
+    editBtn.disabled = true;
+
+    try {
+      const res = await fetch(`/api/clip/${entry.id}/description`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: newText })
+      });
+
+      if (!res.ok) throw new Error('Failed to update description');
+
+      // Update in-memory item
+      if (descItem) descItem.data = newText;
+    } catch (err) {
+      console.error(err);
+      alert('Failed to save description');
+      textarea.readOnly = false;
+      editBtn.disabled = false;
+    }
+  });
+
+  container.appendChild(wrapper);
+}
 
 function renderEntry(entry, prepend) {
   const art = document.createElement('article');
@@ -181,6 +241,8 @@ function renderEntry(entry, prepend) {
       art.appendChild(dlBtn);
     }
   });
+
+  renderDescription(entry, art);
 
   const actions = document.createElement('div');
   actions.className = 'row-actions';

@@ -2,6 +2,7 @@ import { formatBytes } from './utils.js';
 
 const pasteArea = document.getElementById('pasteArea');
 const status    = document.getElementById('sendStatus');
+const clipDescription = document.getElementById('clipDescription');
 
 let sending = false;
 
@@ -114,6 +115,7 @@ async function sendItems(itemsToSend) {
   try {
     const files = itemsToSend.filter(i => i.file);   // actual File objects
     const texts = itemsToSend.filter(i => !i.file);  // plain text/html
+    const desc = clipDescription.value.trim();
 
     let res;
 
@@ -121,6 +123,9 @@ async function sendItems(itemsToSend) {
       // FormData for files, plus JSON text items
       const form = new FormData();
       form.append('source', location.href);
+      if (desc) {
+        form.append('description', desc);
+      }
 
       files.forEach(item => form.append('files', item.file, item.name));
 
@@ -132,23 +137,26 @@ async function sendItems(itemsToSend) {
           name: i.name
         }))));
       }
-
       res = await fetch('/api/clip', { method: 'POST', body: form });
     } else {
-      // only text → send JSON
       const payload = {
         items: texts.map(i => ({ type: i.type, data: i.data, name: i.name })),
         meta: { source: location.href }
       };
+      if (desc) {
+        payload.description = desc;
+      }
+
       res = await fetch('/api/clip', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
-      });
+      });    
     }
 
     const json = await res.json();
     status.textContent = (json && json.ok) ? `Sent. ID=${json.id}` : 'Send failed.';
+    clipDescription.value = '';
   } catch (err) {
     console.error(err);
     status.textContent = 'Error sending to server.';

@@ -28,6 +28,13 @@ store = []
 
 
 # ---------- filesystem helpers ----------
+def find_description_item(entry):
+    """Return the first item with type 'text/description' or None."""
+    for it in entry.get("items", []):
+        if it.get("type") == "text/description":
+            return it
+    return None
+
 def delete_entry_from_disk(cid: int):
     cid_str = f"{cid:06d}"
     clip_dir = os.path.join(DATA_DIR, cid_str)
@@ -99,13 +106,15 @@ def save_item(clip_dir, idx, item, entry_id):
 
     if itype.startswith("text/"):
         fname = name or f"text_{idx}.txt"
+        # special case for description
+        if itype == "text/description":
+            fname = "description.txt"
         file_path = os.path.join(clip_dir, fname)
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(item["data"])
-        # Update metadata
+
         item["path"] = os.path.join(f"{entry_id:06d}", fname)
         item["size"] = len(item["data"])
-        # optional: remove inline text to save memory
         del item["data"]
 
     else:
@@ -200,18 +209,17 @@ def post_clip():
         clip_dir = os.path.join(DATA_DIR, cid_str)
         os.makedirs(clip_dir, exist_ok=True)
 
-        for idx, item in enumerate(payload.get("items", [])):
-            itype = item["type"]
-            name = item.get("name") or f"text_{idx}.txt"
-            file_path = os.path.join(clip_dir, name)
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(item["data"])
+        # ---- optional description field ----
+        description_text = payload.get("description")
+        if description_text:
             entry["items"].append({
-                "type": itype,
-                "name": name,
-                "path": os.path.join(cid_str, name),
-                "size": len(item["data"])
+                "type": "text/description",
+                "data": description_text,
+                "name": "description.txt"
             })
+
+        for idx, item in enumerate(payload.get("items", [])):
+            save_item(clip_dir, idx, item, entry["id"])
 
     # 3️⃣ write metadata
     meta_path = os.path.join(clip_dir, "meta.json")
@@ -220,6 +228,46 @@ def post_clip():
 
     rebuild_store_and_broadcast()
     return jsonify({"ok": True, "id": entry["id"]})
+
+@app.route("/api/clip/<int:cid>/description", methods=["PUT"])
+def update_description(cid):
+    payload = request.get_json(force=True) or {}
+    text = payload.get("text")
+    if not isinstance(text, str):
+        return jsonify({"ok": False, "error": "text must be a string"}), 400
+
+    entry = next((e for e in store if e["id"] == cid), None)
+    if not entry:
+        return jsonify({"ok": False, "error": "clip not found"}), 404
+
+    clip_dir = os.path.join(DATA_DIR, f"{cid:06d}")
+    if not os.path.isdir(clip_dir):
+        return jsonify({"ok": False, "error": "clip directory missing"}), 500
+
+    fname = "description.txt"
+    file_path = os.path.join(clip_dir, fname)
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+    size = len(text.encode('utf-8'))
+    desc_item = find_description_item(entry)
+    if desc_item:
+        desc_item["name"] = fname
+        desc_item["path"] = os.path.join(f"{cid:06d}", fname)
+        desc_item["size"] = size
+    else:
+        entry["items"].append({
+            "type": "text/description",
+            "name": fname,
+            "path": os.path.join(f"{cid:06d}", fname),
+            "size": size
+        })
+
+    with open(os.path.join(clip_dir, "meta.json"), "w", encoding="utf-8") as f:
+        json.dump(entry, f, indent=2)
+
+    rebuild_store_and_broadcast()
+    return jsonify({"ok": True})
 
 @app.route("/api/clip", methods=["DELETE"])
 def delete_clips():
