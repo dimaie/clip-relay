@@ -201,6 +201,16 @@ def post_clip():
                 "path": os.path.join(cid_str, fname),
                 "size": os.path.getsize(path)
             })
+        # ---- optional description field ----
+        description_text = request.form.get("description", "")
+        if description_text:
+            description_item = {
+                "type": "text/description",
+                "data": description_text,
+                "name": "description.txt"
+            }
+            entry["items"].append(description_item)
+            save_item(clip_dir, 0, description_item, entry["id"])
 
     # 2️⃣ handle JSON payload (text items)
     elif request.is_json:
