@@ -17,7 +17,7 @@
             "name": "JS: Debug Frontend",
             "type": "chrome",
             "request": "launch",
-            "url": "https://192.168.2.103:8080",
+            "url": "https://192.168.2.100:8080",
             "webRoot": "${workspaceFolder}/static" 
         }
     ],

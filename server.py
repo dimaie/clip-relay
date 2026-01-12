@@ -11,11 +11,19 @@ from flask import send_from_directory
 import logging
 import sys
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
+
 log = logging.getLogger("clip-relay")
+log.setLevel(logging.DEBUG)
+
+# Clear existing handlers (avoid double logging)
+if log.hasHandlers():
+    log.handlers.clear()
+
+# Attach stdout handler
+handler = logging.StreamHandler(sys.stdout)
+formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+handler.setFormatter(formatter)
+log.addHandler(handler)
 
 DATA_DIR = "data"
 
@@ -140,9 +148,15 @@ def rebuild_store_and_broadcast():
 # ---------- API ----------
 @app.route("/data/<path:filename>")
 def serve_data(filename):
-    # Serve files from the DATA_DIR directory
-    return send_from_directory(DATA_DIR, filename)
+    file_path = os.path.join(DATA_DIR, filename)
+    log.info("Download request: filename=%s, full path=%s", filename, file_path)
 
+    if not os.path.isfile(file_path):
+        log.warning("File not found: %s", file_path)
+        return jsonify({"error": "File not found"}), 404
+
+    log.info("Serving file: %s", file_path)
+    return send_from_directory(DATA_DIR, filename, as_attachment=True)
 
 @app.route("/api/clip/<int:cid>/item/<path:filename>")
 def serve_clip_file(cid, filename):
@@ -359,6 +373,6 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=8080,
-        certfile=CERT_FILE,
-        keyfile=KEY_FILE,
+        ssl_context=(CERT_FILE, KEY_FILE),
+        allow_unsafe_werkzeug=True
     )

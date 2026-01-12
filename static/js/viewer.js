@@ -246,13 +246,13 @@ function renderEntry(entry, prepend) {
       dlBtn.textContent = 'Download';
       dlBtn.addEventListener('click', () => {
         const url = `/data/${it.path}`;
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = it.name || url.split('/').pop();
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      });
+        const form = document.createElement('form');
+        form.method = 'GET';
+        form.action = url;
+        document.body.appendChild(form);
+        form.submit();
+        form.remove();
+      });      
       art.appendChild(dlBtn);
     }
   });
