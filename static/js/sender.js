@@ -3,8 +3,34 @@ import { formatBytes } from './utils.js';
 const pasteArea = document.getElementById('pasteArea');
 const status    = document.getElementById('sendStatus');
 const clipDescription = document.getElementById('clipDescription');
+const uploadBtn = document.getElementById('uploadBtn');
+const fileInput = document.getElementById('fileInput');
 
 let sending = false;
+
+uploadBtn.addEventListener('click', () => {
+  if (sending) return;
+  fileInput.click();
+});
+
+fileInput.addEventListener('change', async () => {
+  if (sending) return;
+  clearUI();
+
+  const items = [];
+  for (const file of fileInput.files) {
+    items.push({
+      type: file.type || 'application/octet-stream',
+      file,
+      name: file.name
+    });
+  }
+
+  // reset input so selecting the same file again still fires change
+  fileInput.value = '';
+
+  await sendItems(items);
+});
 
 // ---- event wiring ----
 pasteArea.addEventListener('paste', onPaste);
